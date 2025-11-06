@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Portal Semanal 4.3 — Rede (Firebase)</title>
+
+<style>
+  :root{
+    --royal:#1e3a8a; --royal2:#0f2a7a; --accent:#facc15;
+    --card:#0b1538; --ink:#f8fafc; --muted:#cbd5e1; --br:#24428f;
+    --ok:#10b981; --bad:#ef4444; --chip:#0d1e52;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font:14px/1.5 Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial; color:var(--ink);
+    background: radial-gradient(1100px 520px at 15% -10%, #2a48b5 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 10%, #2443a8 0%, transparent 60%),
+                linear-gradient(180deg, var(--royal) 0%, var(--royal2) 100%);
+    min-height:100dvh;
+  }
+  header{position:sticky; top:0; z-index:10; backdrop-filter:blur(10px) saturate(140%);
+    background:linear-gradient(180deg, rgba(15,31,92,.9), rgba(15,31,92,.65));
+    border-bottom:1px solid rgba(255,255,255,.08);}
+  .topbar{max-width:1280px;margin:auto;padding:14px 18px;display:flex;gap:16px;align-items:center}
+  .title h1{margin:0;font-size:16px}
+  .title small{color:var(--muted)}
+  .spacer{flex:1}
+  .btn{border:0;border-radius:10px;padding:9px 14px;cursor:pointer;background:rgba(255,255,255,.08);color:var(--ink)}
+  .btn.primary{background:var(--accent);color:#111}
+  .brand img{height:34px;object-fit:contain}
+
+  main{max-width:1280px;margin:18px auto 28px;padding:0 18px}
+  .card{background:linear-gradient(180deg, rgba(11,21,56,.95), rgba(11,21,56,.85));
+         border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:16px}
+  .card h2{margin:0 0 12px;font-size:16px}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  input,select,textarea{background:rgba(255,255,255,.06);color:var(--ink);border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;padding:10px 12px;min-width:160px}
+  textarea{min-height:70px;resize:vertical}
+  .grid{display:grid;gap:18px}
+  .grid.cols-2{grid-template-columns:1.4fr .8fr}
+  @media(max-width:1100px){.grid.cols-2{grid-template-columns:1fr}}
+
+  table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:12px}
+  th,td{padding:10px;text-align:left;border-top:1px solid rgba(255,255,255,.06)}
+  th{background:var(--chip);color:#cfe1ff;font-size:12px;text-transform:uppercase}
+  tr.ok{background:rgba(16,185,129,.08)} tr.bad{background:rgba(239,68,68,.08)}
+  .right{text-align:right}
+  .pill{padding:4px 8px;border-radius:999px;font-size:12px;background:rgba(255,255,255,.1)}
+  .pill.ok{background:rgba(16,185,129,.15);color:#bbf7d0}
+  .pill.bad{background:rgba(239,68,68,.15);color:#fecaca}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+  @media(max-width:900px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px}
+  .kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase}
+  .kpi .value{font-size:26px;font-weight:700;margin-top:2px}
+  .kpi.ok .value{color:var(--ok)} .kpi.bad .value{color:var(--bad)}
+
+  /* extras para o histórico */
+  .link { cursor:pointer; text-decoration:underline; color:#93c5fd; }
+  .badge { font-size:12px; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.1); }
+  .tr-muted td { opacity:.85; }
+</style>
+
+<!-- Firebase SDKs (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+
+<script>
+  /* Seu firebaseConfig */
+  const firebaseConfig = {
+    apiKey: "AIzaSyClyhrk9DPckOJLsX6Mh1gKEgUWvRVJVLU",
+    authDomain: "portal-semanal.firebaseapp.com",
+    projectId: "portal-semanal",
+    storageBucket: "portal-semanal.firebasestorage.app",
+    messagingSenderId: "856389640319",
+    appId: "1:856389640319:web:c76be33e428e851fd5df4a"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const auth = firebase.auth();
+  const DOC_REF = db.doc('portal/state'); // documento único do estado
+</script>
+</head>
+
+<body>
+<header>
+  <div class="topbar">
+    <div class="title">
+      <h1>Portal Semanal 4.3 — Rede</h1>
+      <small>Operações • Histórico • GAP = Realizado − Meta</small>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" onclick="exportarJSON()">Exportar JSON</button>
+    <label class="btn" style="position:relative;overflow:hidden">
+      Importar JSON
+      <input type="file" accept=".json" style="position:absolute;inset:0;opacity:0" onchange="importarJSON(this)">
+    </label>
+    <button class="btn primary" onclick="window.print()">Exportar PDF</button>
+    <div class="brand" title="Expresso Nepomuceno">
+      <img alt="Expresso Nepomuceno"
+           src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVMAAABaCAYAAAAl1J8TAAABdUlEQVR4nO3UMQEAIAzAMFj9r5pE5O3y9mJ9GCTFh4wJ2qk2XwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPxq6Q8Z7y8l4y7W9e9xXl3p3i5Qzv0cHqk6q8Z2lHq7m3cH4Wq7G7oQ6wzM1q2mVw0mC0wq9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wm9s1a2y7m3Q9g6m2Nw0mC03mQn2bYQ2p3mQ8bqv3QkBv2o2Z3w2mC0wmy0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4dAq9H/8R4n2x0wAAAABJRU5ErkJggg==" />
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="controls">
+      <div class="field"><label>Operação</label><select id="selOp" onchange="trocarOperacao()"><option>SMG01</option><option>SMG08</option><option>SMG09</option><option>SMG15</option></select></div>
+      <div class="field"><label>Semana (ISO)</label><input type="week" id="inpSemana"></div>
+      <button class="btn" onclick="usarSemanaAtual()">Usar semana atual</button>
+      <div class="field"><label>Histórico</label><select id="selSemanas" onchange="selecionarSemanaHistorico()"></select></div>
+      <button class="btn" onclick="configDestinatariosPadrao()">Destinatários padrão</button>
+      <button class="btn primary" onclick="novaSemana()">Nova semana</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <div class="grid cols-2">
+    <section class="card">
+      <h2>Status da semana</h2>
+      <div id="tabela"></div>
+    </section>
+
+    <section class="card">
+      <h2>Ações</h2>
+      <div id="acoes"></div>
+
+      <!-- Histórico compacto -->
+      <div id="acoesConcluidas" style="margin-top:10px"></div>
+
+      <!-- Modal de histórico -->
+      <div id="modalHistorico" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:50; align-items:center; justify-content:center;">
+        <div style="background:#0b1538; border:1px solid rgba(255,255,255,.15); border-radius:14px; width:min(920px,94vw); max-height:88vh; overflow:auto; padding:16px;">
+          <div style="display:flex; align-items:center; gap:12px; justify-content:space-between; margin-bottom:10px;">
+            <h3 style="margin:0; font-size:16px">Histórico de ações</h3>
+            <button class="btn" onclick="fecharModalHistorico()">Fechar</button>
+          </div>
+          <div id="listaHistorico"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:18px">
+    <h2>Histórico</h2>
+    <div id="hist"></div>
+  </section>
+</main>
+
+<script>
+/* ===== Itens + estado ===== */
+const ITEMS=['Disponibilidade','Utilização','Instalação Telemetria','Preventivas/Corretivas','Multas','Combustível','Troca de Pneu','Inspeção de Pneus'];
+const OPS=['SMG01','SMG08','SMG09','SMG15'];
+function stateDefault(){ return { semanas:{}, acoes:[], opAtual:'SMG01', destinatariosPadrao:{} }; }
+let STATE = stateDefault();
+let _loadedOnce = false;
+
+/* ===== Utils ===== */
+function semanaISOAtual(){const d=new Date(),j=new Date(d.getFullYear(),0,1);const w=Math.ceil(((d-j)/86400000+j.getDay()+1)/7);return`${d.getFullYear()}-W${String(w).padStart(2,'0')}`;}
+function weeksList(op){return Object.keys((STATE.semanas[op]||{})).sort();}
+function parseEmails(str){return (str||'').split(/[;,]/g).map(s=>s.trim()).filter(s=>s&&/\S+@\S+\.\S+/.test(s));}
+function emailsToString(list){return (list||[]).join(',');}
+function todayISO(){return new Date().toISOString().slice(0,10);}
+
+/* ===== DOM refs ===== */
+const elOp=document.getElementById('selOp'),elSemana=document.getElementById('inpSemana'),elHistSem=document.getElementById('selSemanas'),elTabela=document.getElementById('tabela'),elAcoes=document.getElementById('acoes'),elKpis=document.getElementById('kpis'),elHist=document.getElementById('hist');
+
+/* ===== Firestore ===== */
+async function save(){ await DOC_REF.set({ json: STATE, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true }); }
+function ensureStruct(op,w){STATE.semanas[op]=STATE.semanas[op]||{};STATE.semanas[op][w]=STATE.semanas[op][w]||{};}
+
+/* ===== Controles ===== */
+function trocarOperacao(){STATE.opAtual=elOp.value;save();}
+function usarSemanaAtual(){elSemana.value=semanaISOAtual();renderAll();}
+function selecionarSemanaHistorico(){const v=elHistSem.value;if(v){elSemana.value=v;renderAll();}}
+function novaSemana(){const atual=elSemana.value||semanaISOAtual();const[y,w]=atual.split('-W');elSemana.value=`${y}-W${String(Number(w||'1')+1).padStart(2,'0')}`;renderAll();}
+function renderHistoricoSelect(){const set=new Set(weeksList(STATE.opAtual).concat([elSemana.value]).filter(Boolean));elHistSem.innerHTML=[...set].sort().map(w=>`<option ${w===elSemana.value?'selected':''}>${w}</option>`).join('');}
+function salvarCampo(tipo,semana,item,val){
+  const op=STATE.opAtual; ensureStruct(op,semana);
+  let num=Number(String(val).replace(',','.'));
+  if(item==='Multas' && tipo==='meta'){ num=0; } // multas -> meta travada
+  STATE.semanas[op][semana][item]=STATE.semanas[op][semana][item]||{};
+  STATE.semanas[op][semana][item][tipo]=isNaN(num)?null:num;
+  save();
+}
+
+/* ===== Ações (múltiplos responsáveis) ===== */
+function mailtoBody(a){
+  return `Olá${a.responsavelNome? ' '+a.responsavelNome : ''},
+
+Foi aberta uma AÇÃO no portal semanal.
+
+Operação: ${a.op}
+Semana: ${a.semana}
+Item: ${a.item}
+GAP: ${a.gapTxt}
+Prazo: ${a.prazo || '—'}
+Categoria: ${a.categoria || '—'}
+Prioridade: ${a.prioridade || '—'}
+
+Por favor, tratar e registrar a devolutiva no portal.
+
+Obrigado.`;
+}
+function mailtoLink(a){
+  const subject=encodeURIComponent(`[Ação] ${a.op} • ${a.semana} • ${a.item}`);
+  const to=encodeURIComponent(emailsToString(a.responsaveisEmails||[a.responsavelEmail||'']));
+  const body=encodeURIComponent(mailtoBody(a));
+  return `mailto:${to}?subject=${subject}&body=${body}`;
+}
+async function copyAction(a){const txt=mailtoBody(a);try{await navigator.clipboard.writeText(txt);alert('Copiado.');}catch{alert('Não foi possível copiar.');}}
+function isOverdue(a){if(!a.prazo)return false;return a.prazo<todayISO() && !['Concluída','Cancelada'].includes(a.status);}
+
+function abrirAcaoPrompt(semana,item,gapTxt){
+  const nome=prompt('Responsável (nome):')||'';
+  const padrao=(STATE.destinatariosPadrao?.[STATE.opAtual]?.[item])||'';
+  const emailsStr=prompt('E-mails dos responsáveis (separe por ; ou ,):', padrao);
+  const emails=parseEmails(emailsStr); if(!emails.length) return alert('Informe ao menos um e-mail válido.');
+  const prazo=prompt('Prazo (AAAA-MM-DD) — opcional:', '');
+  const categoria=prompt('Categoria (ex.: Manutenção, Telemetria, Segurança):','Manutenção')||'';
+  const prioridade=prompt('Prioridade (Alta, Média, Baixa):','Média')||'Média';
+  const enviarAgora=confirm('Deseja abrir o seu e-mail agora?');
+  abrirAcao(semana,item,gapTxt,nome,emails,{prazo,categoria,prioridade},enviarAgora);
+}
+function abrirAcao(semana,item,gapTxt,responsavelNome,emailsList,extras={},enviarAgora=false){
+  const id=(STATE.acoes.at(-1)?.id||0)+1;
+  const payload={
+    id, op:STATE.opAtual, semana, item, gapTxt,
+    responsavelNome, responsavelEmail: emailsList[0]||'',
+    responsaveisEmails: emailsList,
+    prazo:(extras.prazo||'').trim(),
+    categoria:(extras.categoria||'').trim(),
+    prioridade:(extras.prioridade||'Média').trim(),
+    status:'Aberta', devolutiva:'', criadoEm:new Date().toISOString()
+  };
+  STATE.acoes.push(payload); save();
+  if(enviarAgora) location.href = mailtoLink(payload);
+}
+
+/* ===== Histórico (abertas x concluídas) ===== */
+function acoesDaSemana(op, semana){ return STATE.acoes.filter(a=>a.op===op && a.semana===semana); }
+function acoesAbertas(op, semana){ return acoesDaSemana(op, semana).filter(a=>!['Concluída','Cancelada'].includes(a.status)); }
+function acoesConcluidas(op, semana){ return acoesDaSemana(op, semana).filter(a=>['Concluída','Cancelada'].includes(a.status)); }
+
+/* ===== GAP/Aderência ===== */
+function calcGapManual(meta,real){ if(meta==null||real==null||isNaN(meta)||isNaN(real)) return null; return (real-meta); }
+function avaliarLinha(item, meta, real){
+  if(item==='Multas'){
+    if(real==null || isNaN(real)) return {gap:null, ader:''};
+    const ok = Number(real)<=0;
+    return {gap: ok? 0 : -100, ader: ok? 'OK' : 'PROMOVER AÇÃO'};
+  }
+  const gap = calcGapManual(meta, real);
+  if(gap===null) return {gap:null, ader:''};
+  return {gap, ader: gap>=0 ? 'OK' : 'PROMOVER AÇÃO'};
+}
+
+/* ===== Renders ===== */
+function renderTabela(){
+  const op=STATE.opAtual, s=elSemana.value;
+  const d=((STATE.semanas[op]||{})[s])||{};
+  let h=`<table><thead><tr>
+    <th>Item</th><th>Meta (%)</th><th>Realizado (%)</th><th>GAP</th><th>Aderência</th><th class="right">Ação</th>
+  </tr></thead><tbody>`;
+
+  ITEMS.forEach(it=>{
+    const row=d[it]||{};
+    let meta=(row.meta!=null && !isNaN(row.meta))?Number(row.meta):'';
+    let real=(row.real!=null && !isNaN(row.real))?Number(row.real):'';
+    if(it==='Multas'){ meta=0; }
+
+    const {gap, ader}=avaliarLinha(it, Number(meta), Number(real));
+    const cls = ader===''? '' : (ader==='OK'?'ok':'bad');
+    const gapTxt = gap===null ? '' : (gap>=0?`+${gap.toFixed(0)}%`:`${gap.toFixed(0)}%`);
+
+    h+=`<tr class="${cls}">
+      <td>${it}</td>
+      <td>${it==='Multas'
+            ? `<input type="number" step="1" value="0" disabled style="opacity:.6;cursor:not-allowed">`
+            : `<input type="number" step="1" value="${meta!==''?meta:''}" onfocus="this.select()" onchange="salvarCampo('meta','${s}','${it}',this.value)">`
+         }</td>
+      <td><input type="number" step="1" value="${real!==''?real:''}" onfocus="this.select()" onchange="salvarCampo('real','${s}','${it}',this.value)"></td>
+      <td>${gapTxt}</td>
+      <td>${ader?`<span class="pill ${ader==='OK'?'ok':'bad'}">${ader}</span>`:''}</td>
+      <td class="right">${(gap!==null && gap<0)?`<button class="btn" onclick="abrirAcaoPrompt('${s}','${it}','${gapTxt}')">Abrir ação</button>`:''}</td>
+    </tr>`;
+  });
+
+  h+='</tbody></table>';
+  elTabela.innerHTML=h;
+}
+
+function renderAcoes(){
+  const op=STATE.opAtual, s=elSemana.value;
+
+  // Abertas
+  const abertas = acoesAbertas(op, s);
+  if(!abertas.length){
+    elAcoes.innerHTML = '<p style="opacity:.8">Sem ações em aberto para esta semana.</p>';
+  } else {
+    let h=`<table><thead><tr>
+      <th>ID</th><th>Item</th><th>GAP</th><th>Prazo</th><th>Categoria</th><th>Prioridade</th>
+      <th>Responsáveis</th><th>Status</th><th>Devolutiva</th><th></th>
+    </tr></thead><tbody>`;
+
+    abertas.forEach(a=>{
+      const venc=isOverdue(a);
+      const emails=(a.responsaveisEmails||[a.responsavelEmail||'']).map(e=>`<span style="opacity:.8">${e}</span>`).join('<br>');
+      h+=`<tr>
+        <td>${a.id}</td>
+        <td>${a.item}</td>
+        <td>${a.gapTxt}</td>
+        <td ${venc?'style="color:#fecaca;font-weight:600"':''}>${a.prazo||'—'}${venc?' (vencido)':''}</td>
+        <td>${a.categoria||'—'}</td>
+        <td>${a.prioridade||'—'}</td>
+        <td>${a.responsavelNome||''}<br>${emails}</td>
+        <td>
+          <select onchange="updStatus(${a.id},this.value)">
+            ${['Aberta','Em andamento','Aguardando material','Concluída','Cancelada']
+              .map(st=>`<option ${a.status===st?'selected':''}>${st}</option>`).join('')}
+          </select>
+        </td>
+        <td><textarea rows="2" onblur="updDev(${a.id},this.value)">${a.devolutiva||''}</textarea></td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn" onclick="location.href='${mailtoLink(a)}'">Re-enviar e-mail</button>
+            <button class="btn" onclick="copyAction(a)">Copiar</button>
+            <button class="btn primary" onclick="updStatus(${a.id},'Concluída')">Concluir</button>
+          </div>
+        </td>
+      </tr>`;
+    });
+    h+='</tbody></table>';
+    elAcoes.innerHTML=h;
+  }
+
+  // Histórico compacto (concluídas/canceladas)
+  const concluidas = acoesConcluidas(op, s);
+  const qtd = concluidas.length;
+  const resumo = qtd
+    ? `<span class="badge">${qtd}</span> ação(ões) concluída(s) • <span class="link" onclick="abrirModalHistorico()">ver detalhes</span>`
+    : '<span style="opacity:.7">Sem ações concluídas nesta semana.</span>';
+  document.getElementById('acoesConcluidas').innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+       <strong>Histórico</strong>
+       <div>${resumo}</div>
+     </div>`;
+}
+
+function renderKpis(){
+  const op=STATE.opAtual, s=elSemana.value, d=((STATE.semanas[op]||{})[s])||{};
+  let preenchidos=0, oks=0, acoes=0;
+  ITEMS.forEach(it=>{
+    const row=d[it];
+    if(!row || (it!=='Multas' && (row.meta==null||isNaN(row.meta))) || row.real==null || isNaN(row.real)) return;
+    preenchidos++;
+    const {gap}=avaliarLinha(it, Number(row.meta ?? 0), Number(row.real));
+    if(gap>=0) oks++; else acoes++;
+  });
+  const okPct=preenchidos? (oks/preenchidos*100).toFixed(0):0;
+  const acPct=preenchidos? (acoes/preenchidos*100).toFixed(0):0;
+  elKpis.innerHTML=`
+    <div class="kpi"><div class="label">Operação</div><div class="value">${op}</div><div class="sub">Selecionada</div></div>
+    <div class="kpi"><div class="label">Itens preenchidos</div><div class="value">${preenchidos}</div><div class="sub">Com meta/realizado</div></div>
+    <div class="kpi ok"><div class="label">% OK</div><div class="value">${okPct}%</div><div class="sub">${oks} de ${preenchidos}</div></div>
+    <div class="kpi bad"><div class="label">% Ação</div><div class="value">${acPct}%</div><div class="sub">${acoes} de ${preenchidos}</div></div>
+  `;
+}
+
+function renderHistorico(){
+  const op=STATE.opAtual; const semanas=weeksList(op);
+  if(!semanas.length){ elHist.innerHTML='<p style="opacity:.8">Sem histórico.</p>'; return; }
+  let html=`<table><thead><tr>
+    <th>Semana</th><th>Itens preenchidos</th><th>% OK</th><th>Ações (total)</th><th>Ações em aberto</th>
+  </tr></thead><tbody>`;
+  semanas.forEach(w=>{
+    const d=((STATE.semanas[op]||{})[w])||{}; let pr=0, ok=0, ac=0;
+    ITEMS.forEach(it=>{
+      const row=d[it];
+      if(!row || (it!=='Multas' && (row.meta==null||isNaN(row.meta))) || row.real==null || isNaN(row.real)) return;
+      pr++; const {gap}=avaliarLinha(it, Number(row.meta ?? 0), Number(row.real)); if(gap>=0) ok++; else ac++;
+    });
+    const totA=STATE.acoes.filter(a=>a.op===op&&a.semana===w).length;
+    const ab=STATE.acoes.filter(a=>a.op===op&&a.semana===w&&!['Concluída','Cancelada'].includes(a.status)).length;
+    html+=`<tr>
+      <td><button class="btn" onclick="elSemana.value='${w}'; renderAll();">${w}</button></td>
+      <td>${pr}</td><td>${pr? (ok/pr*100).toFixed(0):0}%</td>
+      <td>${totA}</td><td>${ab}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>'; elHist.innerHTML=html;
+}
+
+function renderAll(){
+  elOp.value=STATE.opAtual;
+  if(!elSemana.value) elSemana.value=semanaISOAtual();
+  renderHistoricoSelect(); renderTabela(); renderAcoes(); renderKpis(); renderHistorico();
+}
+
+/* ===== Atualizações/Modal ===== */
+function updStatus(id, st){
+  const a = STATE.acoes.find(x=>x.id===id);
+  if(!a) return;
+  a.status = st;
+  save();
+  renderAcoes();
+  renderHistorico();
+}
+function updDev(id,txt){
+  const a=STATE.acoes.find(x=>x.id===id); if(a){a.devolutiva=txt; save();}
+}
+function abrirModalHistorico(){
+  const op=STATE.opAtual, s=elSemana.value;
+  const arr = acoesConcluidas(op, s);
+  let h='';
+  if(!arr.length){
+    h='<p style="opacity:.8">Nenhuma ação concluída/cancelada nesta semana.</p>';
+  }else{
+    h=`<table><thead><tr>
+      <th>ID</th><th>Item</th><th>GAP</th><th>Prazo</th><th>Categoria</th><th>Prioridade</th>
+      <th>Responsáveis</th><th>Status</th><th>Devolutiva</th><th></th>
+    </tr></thead><tbody>`;
+    arr.forEach(a=>{
+      const emails=(a.responsaveisEmails||[a.responsavelEmail||'']).map(e=>`<span style="opacity:.8">${e}</span>`).join('<br>');
+      h+=`<tr class="tr-muted">
+        <td>${a.id}</td>
+        <td>${a.item}</td>
+        <td>${a.gapTxt}</td>
+        <td>${a.prazo||'—'}</td>
+        <td>${a.categoria||'—'}</td>
+        <td>${a.prioridade||'—'}</td>
+        <td>${a.responsavelNome||''}<br>${emails}</td>
+        <td>${a.status}</td>
+        <td style="max-width:280px">${a.devolutiva||''}</td>
+        <td><button class="btn" onclick="updStatus(${a.id},'Em andamento')">Reabrir</button></td>
+      </tr>`;
+    });
+    h+='</tbody></table>';
+  }
+  document.getElementById('listaHistorico').innerHTML=h;
+  document.getElementById('modalHistorico').style.display='flex';
+}
+function fecharModalHistorico(){
+  document.getElementById('modalHistorico').style.display='none';
+}
+
+/* ===== Export/Import ===== */
+function exportarJSON(){
+  const blob=new Blob([JSON.stringify(STATE,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=Object.assign(document.createElement('a'),{href:url,download:'portal-semanal.json'});
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function importarJSON(input){
+  const f=input.files[0]; if(!f) return; const r=new FileReader();
+  r.onload=e=>{ try{ const data=JSON.parse(e.target.result); if(!data.semanas||!data.acoes) throw new Error('Estrutura inválida'); STATE=Object.assign(stateDefault(),data); save(); alert('Importado com sucesso!'); }catch(err){ alert('Falha ao importar: '+err.message); } };
+  r.readAsText(f);
+}
+
+/* ===== Boot ===== */
+document.addEventListener('DOMContentLoaded', async ()=>{
+  try{ await auth.signInAnonymously(); }catch(e){ console.error(e); alert('Falha ao autenticar no Firebase'); }
+  DOC_REF.onSnapshot(snap=>{
+    const data=snap.data();
+    if(data && data.json){ STATE=Object.assign(stateDefault(), data.json); }
+    else { STATE=stateDefault(); save(); }
+    if(!_loadedOnce){ _loadedOnce=true; if(!elSemana.value) elSemana.value=semanaISOAtual(); }
+    renderAll();
+  });
+});
+</script>
+</body>
+</html>
